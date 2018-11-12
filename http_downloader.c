@@ -20,16 +20,17 @@ void parse_url(const char *url, char *host, int *port, char *file_name)
 {
     /*通过url解析出域名, 端口, 以及文件名*/
     int j = 0;
+	int i = 0;
     int start = 0;
     *port = 80;
     char *patterns[] = {"http://", "https://", NULL};
 
-    for (int i = 0; patterns[i]; i++)//分离下载地址中的http协议
+    for (i = 0; patterns[i]; i++)//分离下载地址中的http协议
         if (strncmp(url, patterns[i], strlen(patterns[i])) == 0)
             start = strlen(patterns[i]);
 
     //解析域名, 这里处理时域名后面的端口号会保留
-    for (int i = start; url[i] != '/' && url[i] != '\0'; i++, j++)
+    for (i = start; url[i] != '/' && url[i] != '\0'; i++, j++)
         host[j] = url[i];
     host[j] = '\0';
 
@@ -39,7 +40,7 @@ void parse_url(const char *url, char *host, int *port, char *file_name)
         sscanf(pos, ":%d", port);
 
     //删除域名端口号
-    for (int i = 0; i < (int)strlen(host); i++)
+    for (i = 0; i < (int)strlen(host); i++)
     {
         if (host[i] == ':')
         {
@@ -50,7 +51,7 @@ void parse_url(const char *url, char *host, int *port, char *file_name)
 
     //获取下载文件名
     j = 0;
-    for (int i = start; url[i] != '\0'; i++)
+    for (i = start; url[i] != '\0'; i++)
     {
         if (url[i] == '/')
         {
@@ -86,6 +87,7 @@ struct HTTP_RES_HEADER parse_header(const char *response)
 
 void get_ip_addr(char *host_name, char *ip_addr)
 {
+	int i = 0;
     /*通过域名得到相应的ip地址*/
     struct hostent *host = gethostbyname(host_name);//此函数将会访问DNS服务器
     if (!host)
@@ -94,7 +96,7 @@ void get_ip_addr(char *host_name, char *ip_addr)
         return;
     }
 
-    for (int i = 0; host->h_addr_list[i]; i++)
+    for (i = 0; host->h_addr_list[i]; i++)
     {
         strcpy(ip_addr, inet_ntoa( * (struct in_addr*) host->h_addr_list[i]));
         break;
@@ -195,7 +197,8 @@ int main(int argc, char const *argv[])
     char ip_addr[16] = {0};//远程主机IP地址
     int port = 80;//远程主机端口, http默认80端口
     char file_name[256] = {0};//下载文件名
-
+	int i = 0;
+	
     if (argc == 1)
     {
         printf("您必须给定一个http地址才能开始工作\n");
@@ -295,7 +298,7 @@ int main(int argc, char const *argv[])
 
         //找到响应头的头部信息
         int flag = 0;
-        for (int i = strlen(response) - 1; response[i] == '\n' || response[i] == '\r'; i--, flag++);
+        for (i = strlen(response) - 1; response[i] == '\n' || response[i] == '\r'; i--, flag++);
         if (flag == 4)//连续两个换行和回车表示已经到达响应头的头尾, 即将出现的就是需要下载的内容
             break;
 
