@@ -9,7 +9,7 @@ all: $(TARGET)
 $(TARGET):$(OBJ)
 	$(CROSS_COMPILE)gcc $(CFLAGS) $(OBJ) $(TARGET_CFLAGS) -o $(TARGET)
 $(OBJ):%.o:%.c
-	$(CROSS_COMPILE)gcc -I./include -c -o $@ $<
+	$(CROSS_COMPILE)gcc -I./ -c -o $@ $<
 
 clean:
 	rm -rf $(TARGET) $(OBJ)

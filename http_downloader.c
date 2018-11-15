@@ -8,13 +8,7 @@
 #include <stdlib.h>//exit函数
 #include <sys/stat.h>//stat系统调用获取文件大小
 #include <sys/time.h>//获取下载时间
-
-struct HTTP_RES_HEADER//保持相应头信息
-{
-    int status_code;//HTTP/1.1 '200' OK
-    char content_type[128];//Content-Type: application/gzip
-    long content_length;//Content-Length: 11683079
-};
+#include "http_download.h"
 
 void parse_url(const char *url, char *host, int *port, char *file_name)
 {
@@ -65,24 +59,29 @@ void parse_url(const char *url, char *host, int *port, char *file_name)
     file_name[j] = '\0';
 }
 
-struct HTTP_RES_HEADER parse_header(const char *response)
+int parse_header(const char *response, struct HTTP_RES_HEADER *p_http_head)
 {
+	if(NULL == p_http_head)
+	{
+		printf("p_http_head is NULL\n");
+		return -1;
+	}
     /*获取响应头的信息*/
-    struct HTTP_RES_HEADER resp;
+    //struct HTTP_RES_HEADER resp;
 
     char *pos = strstr(response, "HTTP/");
     if (pos)//获取返回代码
-        sscanf(pos, "%*s %d", &resp.status_code);
+        sscanf(pos, "%*s %d", &p_http_head->status_code);
 
     pos = strstr(response, "Content-Type:");
     if (pos)//获取返回文档类型
-        sscanf(pos, "%*s %s", resp.content_type);
+        sscanf(pos, "%*s %s", p_http_head->content_type);
 
     pos = strstr(response, "Content-Length:");
     if (pos)//获取返回文档长度
-        sscanf(pos, "%*s %ld", &resp.content_length);
+        sscanf(pos, "%*s %ld", &p_http_head->content_length);
 
-    return resp;
+    return 0;
 }
 
 void get_ip_addr(char *host_name, char *ip_addr)
@@ -136,7 +135,8 @@ unsigned long get_file_size(const char *filename)
     return (unsigned long) buf.st_size;
 }
 
-void download(int client_socket, char *file_name, long content_length)
+/**return:0-成功，-1-失败**/
+int download(int client_socket, char *file_name, long content_length)
 {
     /*下载文件函数*/
     long hasrecieve = 0;//记录已经下载的长度
@@ -150,10 +150,15 @@ void download(int client_socket, char *file_name, long content_length)
     if (fd < 0)
     {
         printf("文件创建失败!\n");
-        exit(0);
+		return -1;
     }
 
-    char *buf = (char *) malloc(mem_size * sizeof(char));
+    char *buf = (char *)malloc(mem_size * sizeof(char));
+	if(NULL == buf)
+	{
+		printf("malloc len=%d FAIL!\n",mem_size);
+		return -1;
+	}
 
     //从套接字流中读取文件流
     long diff = 0;
@@ -185,43 +190,54 @@ void download(int client_socket, char *file_name, long content_length)
         if (hasrecieve == content_length)
             break;
     }
+	
+	if(buf)
+	{
+		free(buf);
+		buf = NULL;
+	}
+	return 0;
 }
 
-int main(int argc, char const *argv[])
+int http_download(const char *purl, const char *pfile_name)
 {
     /* 命令行参数: 接收两个参数, 第一个是下载地址, 第二个是文件的保存位置和名字, 下载地址是必须的, 默认下载到当前目录
      * 示例: ./download http://www.baidu.com baidu.html
      */
-    char url[2048] = "127.0.0.1";//设置默认地址为本机,
+    char url[1024] = "127.0.0.1";//设置默认地址为本机,
     char host[64] = {0};//远程主机地址
     char ip_addr[16] = {0};//远程主机IP地址
     int port = 80;//远程主机端口, http默认80端口
-    char file_name[256] = {0};//下载文件名
+    char file_name[128] = {0};//下载文件名
 	int i = 0;
+	int ret = -1;
 	
-    if (argc == 1)
-    {
-        printf("您必须给定一个http地址才能开始工作\n");
-        exit(0);
-    }
-    else
-        strcpy(url, argv[1]);
-
+	if(NULL == purl)
+	{
+		printf("ERROR!purl is NULL\n");
+		return -1;
+	}
+	
+	if(NULL == pfile_name)
+	{
+		printf("ERROR!pfile_name is NULL\n");
+		return -1;
+	}
+	
+	strcpy(url, purl);
+	strcpy(file_name, pfile_name);
+	printf("url=%s\n",url);
+	printf("file_name=%s\n",file_name);
+	
     puts("1: 正在解析下载地址...");
     parse_url(url, host, &port, file_name);//从url中分析出主机名, 端口号, 文件名
-
-    if (argc == 3)
-    {
-        printf("\t您已经将下载文件名指定为: %s\n", argv[2]);
-        strcpy(file_name, argv[2]);
-    }
 
     puts("2: 正在获取远程服务器IP地址...");
     get_ip_addr(host, ip_addr);//调用函数同访问DNS服务器获取远程主机的IP
     if (strlen(ip_addr) == 0)
     {
         printf("错误: 无法获取到远程服务器的IP地址, 请检查下载地址的有效性\n");
-        return 0;
+        return -1;
     }
 
     puts("\n>>>>下载地址解析成功<<<<");
@@ -247,7 +263,7 @@ int main(int argc, char const *argv[])
     if (client_socket < 0)
     {
         printf("套接字创建失败: %d\n", client_socket);
-        exit(-1);
+        return -1;
     }
 
     //创建IP地址结构体
@@ -263,7 +279,7 @@ int main(int argc, char const *argv[])
     if (res == -1)
     {
         printf("连接远程主机失败, error: %d\n", res);
-        exit(-1);
+        return -1;
     }
 
     puts("5: 正在发送http下载请求...");
@@ -305,10 +321,17 @@ int main(int argc, char const *argv[])
         length += len;
     }
 
-    struct HTTP_RES_HEADER resp = parse_header(response);
+	struct HTTP_RES_HEADER resp;
+    parse_header(response, &resp);
 
     printf("\n>>>>http响应头解析成功:<<<<\n");
-
+	/**释放http头申请的内存**/
+	if(buf)
+		free(buf);
+	
+	if(response)
+		free(response);
+	
     printf("\tHTTP响应代码: %d\n", resp.status_code);
     if (resp.status_code != 200)
     {
@@ -332,4 +355,22 @@ int main(int argc, char const *argv[])
     }
     shutdown(client_socket, 2);//关闭套接字的接收和发送
     return 0;
+}
+
+
+int main(int argc, char const *argv[])
+{
+    /* 命令行参数: 接收两个参数, 第一个是下载地址, 第二个是文件的保存位置和名字, 下载地址是必须的, 默认下载到当前目录
+     * 示例: ./download http://www.baidu.com baidu.html
+     */
+	int ret = 0;
+	if (argc < 3)
+	{
+		printf("input error!\n");
+		printf("./usage http://www.baidu.com index.html\n");
+		exit(0);
+	}
+	
+	ret = http_download(argv[1],argv[2]);
+    return ret;
 }
